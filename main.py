@@ -3,14 +3,18 @@
 
 import  xdrlib ,sys
 import xlrd
+import sys
+#import getopt
 from pyExcelerator import *
+
 
 class OrderInfo(object):
     """客户信息收集"""
-    def __init__(self, accountName, accountNumber, accountAddress):
+    def __init__(self, accountName, accountNumber, accountAddress, accountOrdNumber):
         self.accountName =  accountName
         self.accountNumber = accountNumber
         self.accountAddress = accountAddress
+        self.accountOrdNumber = accountOrdNumber
         self.goodsName_Number = {}
         self.goodsName_Price= {}
 
@@ -24,7 +28,7 @@ class OrderInfo(object):
             self.goodsName_Number[goodsName] = int(number)
 
         if self.goodsName_Price.has_key(goodsName):
-            self.goodsName_Price[goodsName] += float(price)
+            self.goodsName_Price[goodsName] = float(price)
         else:            
             self.goodsName_Price[goodsName] = float(price)
 
@@ -92,11 +96,13 @@ def handleExcel(fileName, outputName, sheetIndex) :
         strName = table.cell_value(i,6)
         #获取客户地址
         strAddress = table.cell_value(i,14)
+        #获取下订单的人手机号
+        strOrdNumber = table.cell_value(i, 29)
         orderInfo = None
         if orderInfos.has_key(strNumber):
             orderInfo = orderInfos[strNumber]
         else:
-            orderInfo = OrderInfo(strName, strNumber, strAddress)
+            orderInfo = OrderInfo(strName, strNumber, strAddress, strOrdNumber)
             orderInfos[strNumber] = orderInfo
 
         #获取商品名称清单
@@ -121,24 +127,66 @@ def handleExcel(fileName, outputName, sheetIndex) :
 
     ws = w.add_sheet(u'客户地址与合并订单');
     #访问字典
-    ws.write(0, 0, u'收件人')
-    ws.write(0, 1, u'手机号码')
-    ws.write(0, 2, u'地址')
-    nrows = 1
-
+    #ws.write(0, 0, u'下单人')
+    #ws.write(0, 1, u'收件人')
+    #ws.write(0, 2, u'手机号码')
+    #ws.write(0, 3, u'地址')
+    nrows = 0
     count = 0
     totalPrice = 0
-    for key,value in orderInfos.iteritems():
-        ws.write(nrows, 0, value.accountName)
-        ws.write(nrows, 1, value.accountNumber)
-        ws.write(nrows, 2, value.accountAddress)
+    sortedOrderInfos = sorted(orderInfos.iteritems(), key=lambda (k, v):int(v.accountOrdNumber.split('-')[1]), reverse = True)
+    lastItem = None
+    orderCount = 0
+    for item in sortedOrderInfos:
+        key = item[0]
+        value = item[1]
+        if lastItem == None:
+            lastItem = item[1]
+
+        accountOrdNumber = value.accountOrdNumber.split('-')[1]
+        #print int(accountOrdNumber), type(int(accountOrdNumber))        
+        if int(lastItem.accountOrdNumber.split('-')[1]) != int(accountOrdNumber):
+            ws.write(nrows, 0, u'>>>>>>>>')
+            ws.write(nrows, 1, u'>>>>>>>>')
+            ws.write(nrows, 2, u'>>>>>>>>')
+            ws.write(nrows, 3, u'下单人订单数总计：%d' %(orderCount))
+            ws.write(nrows, 5, u'下单人订单总金额：')
+            nrows += 1
+            ws.write(nrows, 0, u'>>>>>>>>')
+            ws.write(nrows, 1, u'>>>>>>>>')
+            ws.write(nrows, 2, u'>>>>>>>>')
+            ws.write(nrows, 3, u'>>>>>>>>')
+            ws.write(nrows, 4, u'>>>>>>>>')
+            ws.write(nrows, 5, u'>>>>>>>>')
+            ws.write(nrows, 6, u'>>>>>>>>')
+ 
+            nrows += 2
+            lastItem = value
+            orderCount = 1
+        else:
+            orderCount += 1
+
+        ws.write(nrows, 0, u'下单人')
+        ws.write(nrows, 1, u'收件人')
+        ws.write(nrows, 2, u'手机号码')
+        ws.write(nrows, 3, u'地址')
+        nrows += 1
+
+        if orderInfos.has_key(accountOrdNumber):
+            ws.write(nrows, 0, orderInfos[accountOrdNumber].accountName+value.accountOrdNumber)
+        else :
+            ws.write(nrows, 0, value.accountOrdNumber)
+        ws.write(nrows, 1, value.accountName)
+        ws.write(nrows, 2, value.accountNumber)
+        ws.write(nrows, 3, value.accountAddress)
         nrows += 1
 
         ws.write(nrows, 1, u'商品名')
         ws.write(nrows, 2, u'商品数')
         ws.write(nrows, 3, u'商品单价')
         ws.write(nrows, 4, u'商品总价')
-        ws.write(nrows, 5, u'快递价')
+        ws.write(nrows, 5, u'商品实际总价')
+        ws.write(nrows, 6, u'快递价')
         nrows += 1
 
         subTotalPrice = 0
@@ -157,6 +205,20 @@ def handleExcel(fileName, outputName, sheetIndex) :
         #填入商品信息
         nrows += 2
 
+    ws.write(nrows, 0, u'>>>>>>>>')
+    ws.write(nrows, 1, u'>>>>>>>>')
+    ws.write(nrows, 2, u'>>>>>>>>')
+    ws.write(nrows, 3, u'下单人订单数总计：%d' %(orderCount))
+    ws.write(nrows, 5, u'下单人订单总金额：')
+    nrows += 1
+    ws.write(nrows, 0, u'>>>>>>>>')
+    ws.write(nrows, 1, u'>>>>>>>>')
+    ws.write(nrows, 2, u'>>>>>>>>')
+    ws.write(nrows, 3, u'>>>>>>>>')
+    ws.write(nrows, 4, u'>>>>>>>>')
+    ws.write(nrows, 5, u'>>>>>>>>')
+    ws.write(nrows, 6, u'>>>>>>>>')
+    nrows += 1
 
     ws.write(nrows, 2, u'商品数量总数: %d' %(count))
     ws.write(nrows, 4, u'商品总价: %d' %(totalPrice))
@@ -164,12 +226,23 @@ def handleExcel(fileName, outputName, sheetIndex) :
     w.save(outputName)
         
 
-def main():
-    #print "hello world"
+def main(argv):
+    '''
+    try:
+        opts, args = getopt.getopt(argv[1:])
+    except getopt.GetoptError, err:
+        print str(err)
+        sys.exit()
+
     fileName = "input.xls"
-    outputName = fileName.split(".")[0] + "统计.xls"
+    '''
+    if len(sys.argv) < 2:
+        print "请输入xls文件名： python main.py xls文件名"
+        return
+    fileName = sys.argv[1]
+    outputName = fileName.split(".")[0] + "_统计.xls"
     handleExcel(fileName, outputName, 0);
 
 if __name__=="__main__":
-    main()
+    main(sys.argv)
     
